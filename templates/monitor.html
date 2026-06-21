@@ -1,0 +1,416 @@
+{% extends "base.html" %}
+
+{% block title %}Scan Monitor — {{ scan_id }} — IDOR Hunter Pro{% endblock %}
+
+{% block breadcrumb %}
+  <a href="/" style="color:var(--text-dim);text-decoration:none">Dashboard</a>
+  <span style="color:var(--border-hi);margin:0 8px">/</span>
+  <span>Monitor: <span style="color:var(--accent)">{{ scan_id }}</span></span>
+{% endblock %}
+
+{% block topbar_actions %}
+<button class="btn btn-danger btn-sm" id="stopBtn" onclick="stopScan()" style="display:none">Stop</button>
+{% endblock %}
+
+{% block extra_styles %}
+.phase-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+.phase-step:not(:last-child) {
+  border-bottom: 1px solid var(--border);
+}
+.phase-num {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--border-hi);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  color: var(--text-dim); flex-shrink: 0;
+}
+.phase-num.active { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+.phase-num.done { background: var(--accent); color: #000; border-color: var(--accent); }
+
+.phase-label { font-size: 13px; font-weight: 500; color: var(--text); }
+.phase-desc { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+.finding-live {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--red);
+  border-radius: 4px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.finding-live.suspected { border-left-color: var(--yellow); }
+
+.scan-complete-banner {
+  background: linear-gradient(135deg, #091a10, #0d2010);
+  border: 1px solid #1a4020;
+  border-left: 3px solid #4caf50;
+  border-radius: 6px;
+  padding: 20px 24px;
+  display: none;
+}
+
+.probe-feed-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  border-bottom: 1px solid var(--border);
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.probe-score-bar {
+  height: 4px; border-radius: 2px;
+  background: var(--border); flex: 1;
+}
+.probe-score-fill {
+  height: 100%; border-radius: 2px;
+  background: var(--accent);
+  transition: width 0.3s;
+}
+.probe-score-fill.hot { background: var(--red); }
+
+.stats-live {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.stats-live-item {
+  background: var(--surface);
+  padding: 14px 16px;
+  text-align: center;
+}
+{% endblock %}
+
+{% block content %}
+
+<!-- Scan complete banner -->
+<div class="scan-complete-banner" id="completeBanner">
+  <div class="flex-between">
+    <div>
+      <div style="font-family:var(--mono);font-size:11px;color:#4caf50;letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px">
+        ✓ Scan Complete
+      </div>
+      <div style="font-size:15px;font-weight:500;color:var(--text-hi)" id="completeSummary">
+        Scan finished.
+      </div>
+    </div>
+    <a href="/findings" class="btn btn-primary">View All Findings →</a>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 300px;gap:20px;margin-top:0" id="mainGrid">
+
+  <!-- Left: Terminal + Probes -->
+  <div>
+
+    <!-- Live stats row -->
+    <div class="stats-live mb-16" id="liveStats">
+      <div class="stats-live-item">
+        <div style="font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px">Probes Sent</div>
+        <div style="font-family:var(--mono);font-size:24px;font-weight:600;color:var(--text-hi)" id="lsProbes">0</div>
+      </div>
+      <div class="stats-live-item">
+        <div style="font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px">Hits</div>
+        <div style="font-family:var(--mono);font-size:24px;font-weight:600;color:var(--yellow)" id="lsHits">0</div>
+      </div>
+      <div class="stats-live-item">
+        <div style="font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px">Confirmed</div>
+        <div style="font-family:var(--mono);font-size:24px;font-weight:600;color:var(--red)" id="lsConfirmed">0</div>
+      </div>
+      <div class="stats-live-item">
+        <div style="font-family:var(--mono);font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px">Progress</div>
+        <div style="font-family:var(--mono);font-size:24px;font-weight:600;color:var(--accent)" id="lsProgress">0%</div>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div style="margin-bottom:16px">
+      <div class="flex-between mb-8">
+        <span class="mono text-xs dim" id="progressLabel">Initializing...</span>
+        <span class="mono text-xs accent" id="progressPct">0%</span>
+      </div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar" id="progressBar" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Terminal output -->
+    <div class="card">
+      <div class="card-title">Scan Output</div>
+      <div class="terminal" id="terminal">
+        <div class="terminal-line">
+          <span class="terminal-ts">{{ "now" }}</span>
+          <span class="terminal-event phase">[INIT]</span>
+          <span class="terminal-msg">IDOR Hunter Pro engine starting... session <span class="hl">{{ scan_id }}</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live probe feed -->
+    <div class="card mt-16">
+      <div class="flex-between mb-12">
+        <div class="card-title" style="margin-bottom:0">Probe Feed</div>
+        <span class="mono text-xs dim" id="probeFeedCount">0 probes</span>
+      </div>
+      <div id="probeFeed" style="max-height:280px;overflow-y:auto">
+        <div class="dim text-sm" style="padding:20px 0;text-align:center">Waiting for probes...</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Right: Phases + Live Findings -->
+  <div>
+
+    <!-- Phase tracker -->
+    <div class="card mb-16">
+      <div class="card-title">Pipeline</div>
+      <div>
+        <div class="phase-step">
+          <div class="phase-num" id="ph1">1</div>
+          <div>
+            <div class="phase-label">Discovery</div>
+            <div class="phase-desc" id="ph1desc">Detecting ID parameters...</div>
+          </div>
+        </div>
+        <div class="phase-step">
+          <div class="phase-num" id="ph2">2</div>
+          <div>
+            <div class="phase-label">Enumeration</div>
+            <div class="phase-desc" id="ph2desc">Probing ID ranges...</div>
+          </div>
+        </div>
+        <div class="phase-step">
+          <div class="phase-num" id="ph3">3</div>
+          <div>
+            <div class="phase-label">Confirmation</div>
+            <div class="phase-desc" id="ph3desc">3-hit verification</div>
+          </div>
+        </div>
+        <div class="phase-step">
+          <div class="phase-num" id="ph4">4</div>
+          <div>
+            <div class="phase-label">Report Generation</div>
+            <div class="phase-desc" id="ph4desc">Awaiting findings</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live findings -->
+    <div class="card">
+      <div class="flex-between mb-12">
+        <div class="card-title" style="margin-bottom:0">Live Findings</div>
+        <span class="badge badge-confirmed" id="findingCount">0</span>
+      </div>
+      <div id="liveFindingsPanel">
+        <div class="dim text-sm" style="padding:20px 0;text-align:center">
+          No findings yet
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const SCAN_ID = "{{ scan_id }}";
+let probeCount = 0;
+let hitCount = 0;
+let confirmedCount = 0;
+let totalEp = 0;
+let doneEp = 0;
+let firstProbe = true;
+const terminal = document.getElementById('terminal');
+const probeFeed = document.getElementById('probeFeed');
+
+function ts() {
+  return new Date().toTimeString().slice(0,8);
+}
+
+function addLog(eventClass, msg) {
+  const line = document.createElement('div');
+  line.className = 'terminal-line';
+  line.innerHTML = `
+    <span class="terminal-ts">${ts()}</span>
+    <span class="terminal-event ${eventClass}">[${eventClass.toUpperCase()}]</span>
+    <span class="terminal-msg">${msg}</span>
+  `;
+  terminal.appendChild(line);
+  terminal.scrollTop = terminal.scrollHeight;
+}
+
+function setPhase(num) {
+  for (let i = 1; i <= 4; i++) {
+    const el = document.getElementById(`ph${i}`);
+    if (i < num) el.classList.add('done'), el.classList.remove('active'), el.textContent = '✓';
+    else if (i === num) el.classList.add('active'), el.classList.remove('done');
+    else el.classList.remove('active','done');
+  }
+}
+
+function updateProgress(pct, label) {
+  document.getElementById('progressBar').style.width = pct + '%';
+  document.getElementById('progressPct').textContent = Math.round(pct) + '%';
+  document.getElementById('progressLabel').textContent = label;
+  document.getElementById('lsProgress').textContent = Math.round(pct) + '%';
+}
+
+function addFinding(f) {
+  confirmedCount++;
+  document.getElementById('lsConfirmed').textContent = confirmedCount;
+  document.getElementById('findingCount').textContent = confirmedCount;
+
+  const panel = document.getElementById('liveFindingsPanel');
+  const isFirst = panel.querySelector('.dim');
+  if (isFirst) panel.innerHTML = '';
+
+  const div = document.createElement('div');
+  div.className = `finding-live ${f.status !== 'confirmed' ? 'suspected' : ''}`;
+  div.innerHTML = `
+    <div class="flex-between mb-4">
+      <span class="badge badge-${f.status}">${f.status}</span>
+      <span class="badge badge-${cvssColor(f.cvss_score)}">${f.cvss_score?.toFixed(1)} CVSS</span>
+    </div>
+    <div style="color:var(--text-hi);margin-bottom:2px">${f.param?.key || 'id'} = <span style="color:var(--red)">${f.evidence?.injected_id}</span></div>
+    <div style="color:var(--text-dim);font-size:10px;margin-bottom:6px">${f.endpoint}</div>
+    <div style="color:var(--accent);font-size:10px">${(f.evidence?.fields_exposed || []).join(', ') || 'no sensitive fields'}</div>
+    <div style="margin-top:8px">
+      <a href="/findings/${f.id}" style="color:var(--accent);font-size:10px;text-decoration:none">View evidence →</a>
+    </div>
+  `;
+  panel.insertBefore(div, panel.firstChild);
+}
+
+function addProbe(data) {
+  probeCount++;
+  if (data.diff_score >= 0.4) hitCount++;
+
+  document.getElementById('lsProbes').textContent = probeCount;
+  document.getElementById('lsHits').textContent = hitCount;
+  document.getElementById('probeFeedCount').textContent = `${probeCount} probes`;
+
+  if (firstProbe) {
+    probeFeed.innerHTML = '';
+    firstProbe = false;
+  }
+
+  // Progress
+  if (data.ep_total > 0) {
+    totalEp = data.ep_total;
+    const pct = ((data.ep_index + 1) / data.ep_total) * 100;
+    updateProgress(pct, `Probing endpoint ${data.ep_index + 1} / ${data.ep_total}`);
+  }
+
+  const isHot = data.diff_score >= 0.5;
+  const row = document.createElement('div');
+  row.className = 'probe-feed-item';
+  row.innerHTML = `
+    <span style="color:var(--text-dim);flex-shrink:0">${data.status_code || '—'}</span>
+    <span style="color:${isHot ? 'var(--red)' : 'var(--text-dim)'}; flex-shrink:0">${data.test_id}</span>
+    <div class="probe-score-bar" style="flex:1">
+      <div class="probe-score-fill ${isHot ? 'hot' : ''}" style="width:${Math.round(data.diff_score * 100)}%"></div>
+    </div>
+    <span style="color:${isHot ? 'var(--red)' : 'var(--text-dim)'};flex-shrink:0">${(data.diff_score * 100).toFixed(0)}%</span>
+  `;
+  probeFeed.insertBefore(row, probeFeed.firstChild);
+
+  // Limit probe feed to 80 items
+  while (probeFeed.children.length > 80) {
+    probeFeed.removeChild(probeFeed.lastChild);
+  }
+}
+
+// Connect SSE
+const evtSource = new EventSource(`/api/scan/${SCAN_ID}/events`);
+document.getElementById('stopBtn').style.display = 'inline-flex';
+setPhase(1);
+
+evtSource.addEventListener('phase', e => {
+  const d = JSON.parse(e.data);
+  setPhase(d.phase);
+  addLog('phase', d.message);
+  if (d.phase === 2) {
+    document.getElementById('ph1desc').textContent = 'Complete';
+    document.getElementById('ph2desc').textContent = 'Running...';
+  }
+});
+
+evtSource.addEventListener('discovery_complete', e => {
+  const d = JSON.parse(e.data);
+  addLog('info', `<span class="hl">${d.testable}</span> testable endpoints found (${d.skipped} skipped)`);
+  setPhase(2);
+});
+
+evtSource.addEventListener('probe', e => {
+  addProbe(JSON.parse(e.data));
+  setPhase(3);
+  document.getElementById('ph3desc').textContent = 'Verifying hits...';
+});
+
+evtSource.addEventListener('finding', e => {
+  const d = JSON.parse(e.data);
+  addLog('finding', `IDOR DETECTED — <span class="hl">${d.finding.param?.key}</span> on <span class="hl">${d.finding.endpoint}</span> → CVSS <span class="err">${d.finding.cvss_score?.toFixed(1)}</span>`);
+  addFinding(d.finding);
+});
+
+evtSource.addEventListener('complete', e => {
+  const d = JSON.parse(e.data);
+  const s = d.stats;
+  evtSource.close();
+  setPhase(4);
+  updateProgress(100, 'Scan complete');
+  addLog('complete', `Done. ${s.confirmed} confirmed, ${s.suspected} suspected across ${s.testable_endpoints} endpoints.`);
+  document.getElementById('stopBtn').style.display = 'none';
+
+  const banner = document.getElementById('completeBanner');
+  banner.style.display = 'flex';
+  document.getElementById('completeSummary').textContent =
+    `Found ${s.confirmed} confirmed IDOR${s.confirmed !== 1 ? 's' : ''} and ${s.suspected} suspected across ${s.total_endpoints} endpoints.`;
+
+  document.getElementById('ph4desc').textContent = 'Ready — view findings below';
+});
+
+evtSource.addEventListener('heartbeat', () => {});
+
+evtSource.onerror = () => {
+  addLog('warn', 'Connection lost. Scan may still be running...');
+};
+
+function stopScan() {
+  evtSource.close();
+  document.getElementById('stopBtn').style.display = 'none';
+  addLog('warn', 'Scan stopped by user.');
+  updateProgress(100, 'Stopped by user');
+}
+</script>
+{% endblock %}

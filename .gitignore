@@ -1,0 +1,24 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Reports (generated, contain real findings — don't commit)
+reports/*.pdf
+reports/*.html
+
+# Environment / secrets
+.env
+*.cookie
+*.session
+
+# Mac/OS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Logs
+*.log

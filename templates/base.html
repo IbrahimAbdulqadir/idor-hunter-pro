@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}IDOR Hunter Pro{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* ── Design Tokens ── */
+    :root {
+      --bg:         #0a0c10;
+      --surface:    #0f1318;
+      --border:     #1e2530;
+      --border-hi:  #2a3545;
+      --text:       #c8d0dc;
+      --text-dim:   #5a6478;
+      --text-hi:    #e8edf5;
+      --accent:     #00c9a7;       /* hunter teal — the one bold choice */
+      --accent-dim: #00c9a715;
+      --accent-glow:#00c9a730;
+      --red:        #ff4d6d;
+      --red-dim:    #ff4d6d15;
+      --yellow:     #f5a623;
+      --yellow-dim: #f5a62315;
+      --blue:       #4a9eff;
+      --mono:       'IBM Plex Mono', monospace;
+      --sans:       'IBM Plex Sans', sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.6;
+      min-height: 100vh;
+      display: flex;
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 220px;
+      min-height: 100vh;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      left: 0; top: 0; bottom: 0;
+      z-index: 100;
+    }
+
+    .sidebar-logo {
+      padding: 24px 20px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo-mark {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    .logo-name {
+      font-family: var(--mono);
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--text-hi);
+      margin-top: 4px;
+    }
+
+    .logo-version {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    .sidebar-nav {
+      padding: 16px 0;
+      flex: 1;
+    }
+
+    .nav-section-label {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.2em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      padding: 12px 20px 6px;
+    }
+
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 20px;
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 400;
+      transition: color 0.15s, background 0.15s;
+      border-left: 2px solid transparent;
+    }
+
+    .nav-link:hover { color: var(--text); background: var(--accent-dim); }
+    .nav-link.active {
+      color: var(--accent);
+      border-left-color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    .nav-icon {
+      width: 16px;
+      height: 16px;
+      opacity: 0.7;
+      flex-shrink: 0;
+    }
+
+    .sidebar-footer {
+      padding: 16px 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 6px var(--accent);
+      margin-right: 6px;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .status-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+
+    /* ── Main Content ── */
+    .main {
+      margin-left: 220px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    .topbar {
+      height: 52px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      z-index: 50;
+    }
+
+    .topbar-breadcrumb {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    .topbar-breadcrumb span {
+      color: var(--text);
+    }
+
+    .topbar-actions { display: flex; gap: 10px; }
+
+    .content { padding: 28px; flex: 1; }
+
+    /* ── Components ── */
+    .page-header { margin-bottom: 28px; }
+    .page-title {
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--text-hi);
+      font-family: var(--sans);
+    }
+    .page-subtitle {
+      font-size: 13px;
+      color: var(--text-dim);
+      margin-top: 4px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 20px;
+    }
+
+    .card-title {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 16px;
+    }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+    /* ── Stat Cards ── */
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 18px 20px;
+    }
+
+    .stat-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-family: var(--mono);
+      font-size: 32px;
+      font-weight: 600;
+      color: var(--text-hi);
+      line-height: 1;
+    }
+
+    .stat-value.accent { color: var(--accent); }
+    .stat-value.red { color: var(--red); }
+    .stat-value.yellow { color: var(--yellow); }
+
+    .stat-sub {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 6px;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: var(--sans);
+      cursor: pointer;
+      transition: all 0.15s;
+      border: none;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #000;
+    }
+    .btn-primary:hover { background: #00e8c2; }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border-hi);
+    }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+    .btn-danger {
+      background: var(--red-dim);
+      color: var(--red);
+      border: 1px solid var(--red);
+    }
+    .btn-danger:hover { background: var(--red); color: #fff; }
+
+    .btn-sm { padding: 5px 11px; font-size: 12px; }
+    .btn-lg { padding: 11px 22px; font-size: 14px; }
+
+    /* ── Forms ── */
+    .form-group { margin-bottom: 18px; }
+
+    .form-label {
+      display: block;
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 7px;
+    }
+
+    .form-hint {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 5px;
+    }
+
+    .input, .textarea, .select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-hi);
+      font-family: var(--mono);
+      font-size: 13px;
+      padding: 9px 12px;
+      transition: border-color 0.15s;
+      outline: none;
+    }
+
+    .input:focus, .textarea:focus, .select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-glow);
+    }
+
+    .textarea {
+      resize: vertical;
+      min-height: 120px;
+      line-height: 1.6;
+    }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .badge-confirmed { background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent); }
+    .badge-suspected  { background: var(--yellow-dim); color: var(--yellow); border: 1px solid var(--yellow); }
+    .badge-false_positive { background: var(--border); color: var(--text-dim); border: 1px solid var(--border-hi); }
+    .badge-running    { background: var(--accent-dim); color: var(--accent); }
+    .badge-complete   { background: #1a2a1a; color: #4caf50; border: 1px solid #4caf50; }
+    .badge-idle       { background: var(--border); color: var(--text-dim); }
+
+    .badge-critical { background: #2a0a10; color: var(--red); border: 1px solid var(--red); }
+    .badge-high     { background: #2a1a0a; color: var(--yellow); border: 1px solid var(--yellow); }
+    .badge-medium   { background: #0a1a2a; color: var(--blue); border: 1px solid var(--blue); }
+    .badge-low      { background: var(--border); color: var(--text-dim); border: 1px solid var(--border-hi); }
+
+    /* ── Table ── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      color: var(--text);
+    }
+    tr:hover td { background: var(--accent-dim); }
+    tr:last-child td { border-bottom: none; }
+
+    /* ── Terminal / Code ── */
+    .terminal {
+      background: #060809;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.7;
+      overflow-y: auto;
+      max-height: 400px;
+    }
+
+    .terminal-line { display: flex; gap: 10px; }
+    .terminal-ts { color: var(--text-dim); flex-shrink: 0; }
+    .terminal-event { color: var(--text-dim); flex-shrink: 0; }
+    .terminal-event.phase { color: var(--accent); font-weight: 600; }
+    .terminal-event.finding { color: var(--red); font-weight: 600; }
+    .terminal-event.complete { color: #4caf50; font-weight: 600; }
+    .terminal-msg { color: var(--text); }
+    .terminal-msg .hl { color: var(--accent); }
+    .terminal-msg .warn { color: var(--yellow); }
+    .terminal-msg .err { color: var(--red); }
+
+    /* ── Progress ── */
+    .progress-bar-wrap {
+      background: var(--border);
+      border-radius: 3px;
+      height: 4px;
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 3px;
+      transition: width 0.4s ease;
+      box-shadow: 0 0 8px var(--accent-glow);
+    }
+
+    /* ── Divider ── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 20px 0;
+    }
+
+    /* ── Utilities ── */
+    .flex { display: flex; }
+    .flex-center { display: flex; align-items: center; }
+    .flex-between { display: flex; align-items: center; justify-content: space-between; }
+    .gap-8  { gap: 8px; }
+    .gap-12 { gap: 12px; }
+    .gap-16 { gap: 16px; }
+    .gap-20 { gap: 20px; }
+    .mt-4  { margin-top: 4px; }
+    .mt-8  { margin-top: 8px; }
+    .mt-12 { margin-top: 12px; }
+    .mt-16 { margin-top: 16px; }
+    .mt-20 { margin-top: 20px; }
+    .mt-28 { margin-top: 28px; }
+    .mb-4  { margin-bottom: 4px; }
+    .mb-8  { margin-bottom: 8px; }
+    .mb-12 { margin-bottom: 12px; }
+    .mb-16 { margin-bottom: 16px; }
+    .mono  { font-family: var(--mono); }
+    .dim   { color: var(--text-dim); }
+    .hi    { color: var(--text-hi); }
+    .accent { color: var(--accent); }
+    .red   { color: var(--red); }
+    .yellow { color: var(--yellow); }
+    .text-sm { font-size: 12px; }
+    .text-xs { font-size: 11px; }
+    .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+    /* ── Empty State ── */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-dim);
+    }
+    .empty-state-icon { font-size: 40px; margin-bottom: 12px; opacity: 0.4; }
+    .empty-state-title { font-size: 15px; color: var(--text); margin-bottom: 6px; }
+    .empty-state-text { font-size: 13px; }
+
+    {% block extra_styles %}{% endblock %}
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">&#x25C6; RedMind Suite</div>
+      <div class="logo-name">IDOR Hunter</div>
+      <div class="logo-version">v1.0.0 — Week 1 Build</div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Core</div>
+      <a href="/" class="nav-link {% if request.path == '/' %}active{% endif %}">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/>
+          <rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/>
+        </svg>
+        Dashboard
+      </a>
+      <a href="/scan/new" class="nav-link {% if '/scan/new' in request.path %}active{% endif %}">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="8" cy="8" r="6"/><line x1="8" y1="5" x2="8" y2="11"/><line x1="5" y1="8" x2="11" y2="8"/>
+        </svg>
+        New Scan
+      </a>
+      <a href="/findings" class="nav-link {% if '/findings' in request.path %}active{% endif %}">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M2 4h12M2 8h8M2 12h5"/><circle cx="12" cy="11" r="3"/>
+          <line x1="14.1" y1="13.1" x2="15.5" y2="14.5"/>
+        </svg>
+        Findings
+      </a>
+      <div class="nav-section-label" style="margin-top:8px;">Reports</div>
+      <a href="#" class="nav-link dim" style="opacity:.5;cursor:not-allowed;">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M3 2h7l3 3v9H3z"/><line x1="6" y1="7" x2="10" y2="7"/><line x1="6" y1="10" x2="10" y2="10"/>
+        </svg>
+        Report Builder <span style="font-size:9px;margin-left:4px;opacity:.6">[WK2]</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="flex-center gap-8">
+        <span class="status-dot"></span>
+        <span class="status-label">Engine online</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="topbar">
+      <div class="topbar-breadcrumb">
+        {% block breadcrumb %}<span>Dashboard</span>{% endblock %}
+      </div>
+      <div class="topbar-actions">
+        {% block topbar_actions %}{% endblock %}
+        <a href="/scan/new" class="btn btn-primary btn-sm">
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/>
+          </svg>
+          New Scan
+        </a>
+      </div>
+    </div>
+
+    <div class="content">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <script>
+    // Global helpers
+    function cvssColor(score) {
+      if (score >= 9.0) return 'critical';
+      if (score >= 7.0) return 'high';
+      if (score >= 4.0) return 'medium';
+      return 'low';
+    }
+
+    function statusBadge(status) {
+      return `<span class="badge badge-${status}">${status}</span>`;
+    }
+
+    function timeAgo(isoStr) {
+      if (!isoStr) return '—';
+      const diff = Math.floor((Date.now() - new Date(isoStr)) / 1000);
+      if (diff < 60) return `${diff}s ago`;
+      if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+      return `${Math.floor(diff/3600)}h ago`;
+    }
+  </script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

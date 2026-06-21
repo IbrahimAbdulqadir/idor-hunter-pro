@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}Findings — IDOR Hunter Pro{% endblock %}
+
+{% block breadcrumb %}
+  <a href="/" style="color:var(--text-dim);text-decoration:none">Dashboard</a>
+  <span style="color:var(--border-hi);margin:0 8px">/</span>
+  <span>Findings</span>
+{% endblock %}
+
+{% block extra_styles %}
+.findings-kanban {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.kanban-col {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.kanban-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.kanban-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.kanban-title.confirmed { color: var(--red); }
+.kanban-title.suspected  { color: var(--yellow); }
+.kanban-title.fp         { color: var(--text-dim); }
+
+.kanban-body { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+
+.finding-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  text-decoration: none;
+  display: block;
+}
+.finding-card:hover { border-color: var(--border-hi); }
+.finding-card.confirmed:hover { border-color: var(--red); }
+.finding-card.suspected:hover  { border-color: var(--yellow); }
+
+.finding-ep {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-hi);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 6px;
+}
+.finding-meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.finding-param { font-family: var(--mono); font-size: 10px; color: var(--accent); }
+.finding-exposed { font-size: 10px; color: var(--text-dim); margin-top: 4px; }
+
+.filter-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.filter-btn {
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  transition: all .15s;
+}
+.filter-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div class="page-title">Findings Board</div>
+  <div class="page-subtitle" id="findingsSummary">Loading...</div>
+</div>
+
+<div class="filter-bar">
+  <button class="filter-btn active" onclick="filterFindings('all', this)">All</button>
+  <button class="filter-btn" onclick="filterFindings('confirmed', this)">Confirmed</button>
+  <button class="filter-btn" onclick="filterFindings('suspected', this)">Suspected</button>
+  <button class="filter-btn" onclick="filterFindings('false_positive', this)">False Positives</button>
+</div>
+
+<div class="findings-kanban" id="kanban">
+  <div class="kanban-col">
+    <div class="kanban-header">
+      <span class="kanban-title confirmed">Confirmed</span>
+      <span class="badge badge-confirmed" id="cntConfirmed">0</span>
+    </div>
+    <div class="kanban-body" id="colConfirmed">
+      <div class="dim text-sm" style="text-align:center;padding:20px 0">No confirmed findings</div>
+    </div>
+  </div>
+
+  <div class="kanban-col">
+    <div class="kanban-header">
+      <span class="kanban-title suspected">Suspected</span>
+      <span class="badge badge-suspected" id="cntSuspected">0</span>
+    </div>
+    <div class="kanban-body" id="colSuspected">
+      <div class="dim text-sm" style="text-align:center;padding:20px 0">No suspected findings</div>
+    </div>
+  </div>
+
+  <div class="kanban-col">
+    <div class="kanban-header">
+      <span class="kanban-title fp">False Positives</span>
+      <span class="badge badge-false_positive" id="cntFP">0</span>
+    </div>
+    <div class="kanban-body" id="colFP">
+      <div class="dim text-sm" style="text-align:center;padding:20px 0">None</div>
+    </div>
+  </div>
+</div>
+
+<!-- Full table view -->
+<div class="card mt-20" id="tableView" style="display:none">
+  <div class="card-title">All Findings</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th><th>Endpoint</th><th>Method</th>
+          <th>Param</th><th>Status</th><th>CVSS</th>
+          <th>Fields Exposed</th><th>Injected ID</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="findingsTableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let allFindings = [];
+
+function cardHTML(f) {
+  const score = f.cvss_score?.toFixed(1);
+  const color = cvssColor(f.cvss_score);
+  return `
+    <a class="finding-card ${f.status}" href="/findings/${f.id}">
+      <div class="finding-ep">${f.endpoint}</div>
+      <div class="finding-meta">
+        <span class="badge badge-${color}">${score} CVSS</span>
+        <span class="badge badge-idle">${f.method}</span>
+        <span class="finding-param">${f.param?.key || 'id'} → ${f.evidence?.injected_id || '?'}</span>
+      </div>
+      <div class="finding-exposed">
+        ${(f.evidence?.fields_exposed || []).join(', ') || 'fields unknown'}
+      </div>
+    </a>
+  `;
+}
+
+function renderKanban(findings) {
+  const confirmed = findings.filter(f => f.status === 'confirmed');
+  const suspected  = findings.filter(f => f.status === 'suspected');
+  const fp         = findings.filter(f => f.status === 'false_positive');
+
+  document.getElementById('cntConfirmed').textContent = confirmed.length;
+  document.getElementById('cntSuspected').textContent  = suspected.length;
+  document.getElementById('cntFP').textContent         = fp.length;
+
+  const fill = (colId, items, emptyMsg) => {
+    const col = document.getElementById(colId);
+    col.innerHTML = items.length
+      ? items.map(cardHTML).join('')
+      : `<div class="dim text-sm" style="text-align:center;padding:20px 0">${emptyMsg}</div>`;
+  };
+
+  fill('colConfirmed', confirmed, 'No confirmed findings');
+  fill('colSuspected',  suspected,  'No suspected findings');
+  fill('colFP',         fp,         'None');
+
+  document.getElementById('findingsSummary').textContent =
+    `${confirmed.length} confirmed · ${suspected.length} suspected · ${fp.length} false positives`;
+}
+
+async function loadFindings() {
+  const res = await fetch('/api/findings').then(r => r.json()).catch(() => []);
+  allFindings = res;
+  renderKanban(res);
+}
+
+function filterFindings(status, btn) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const filtered = status === 'all' ? allFindings : allFindings.filter(f => f.status === status);
+  renderKanban(filtered);
+}
+
+loadFindings();
+setInterval(loadFindings, 8000);
+</script>
+{% endblock %}

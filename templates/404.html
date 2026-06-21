@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Not Found — IDOR Hunter Pro{% endblock %}
+{% block content %}
+<div class="empty-state" style="margin-top:80px">
+  <div class="empty-state-icon" style="font-family:var(--mono);font-size:60px;color:var(--accent)">404</div>
+  <div class="empty-state-title">Page not found</div>
+  <div class="empty-state-text">That scan session or finding doesn't exist.</div>
+  <a href="/" class="btn btn-ghost" style="margin-top:20px">← Back to Dashboard</a>
+</div>
+{% endblock %}

@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+
+{% block title %}Finding {{ finding.id }} — IDOR Hunter Pro{% endblock %}
+
+{% block breadcrumb %}
+  <a href="/" style="color:var(--text-dim);text-decoration:none">Dashboard</a>
+  <span style="color:var(--border-hi);margin:0 8px">/</span>
+  <a href="/findings" style="color:var(--text-dim);text-decoration:none">Findings</a>
+  <span style="color:var(--border-hi);margin:0 8px">/</span>
+  <span style="color:var(--accent)">{{ finding.id }}</span>
+{% endblock %}
+
+{% block topbar_actions %}
+<a href="/findings" class="btn btn-ghost btn-sm">← Back to Findings</a>
+{% endblock %}
+
+{% block extra_styles %}
+.evidence-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.req-panel {
+  background: #060809;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.req-panel-header {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.req-panel-body {
+  padding: 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.8;
+  overflow-x: auto;
+  max-height: 340px;
+  overflow-y: auto;
+}
+.http-method { color: #4a9eff; font-weight: 600; }
+.http-url    { color: #e8edf5; }
+.http-header-key { color: var(--text-dim); }
+.http-header-val { color: var(--text); }
+.http-body   { color: #c8d0dc; }
+.injected    { color: var(--red); font-weight: 600; background: var(--red-dim); padding: 0 3px; border-radius: 2px; }
+
+.diff-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  margin-bottom: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.diff-field .field-name { color: var(--accent); flex: 1; }
+.diff-field .field-sensitive { color: var(--red); font-size: 10px; }
+
+.cvss-bar-wrap {
+  background: var(--border);
+  border-radius: 4px;
+  height: 8px;
+  overflow: hidden;
+  flex: 1;
+}
+.cvss-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+}
+{% endblock %}
+
+{% block content %}
+{% set f = finding %}
+{% set ev = f.evidence %}
+{% set score_class = 'critical' if f.cvss_score >= 9 else ('high' if f.cvss_score >= 7 else ('medium' if f.cvss_score >= 4 else 'low')) %}
+
+<!-- Header -->
+<div class="flex-between mb-20">
+  <div>
+    <div class="flex-center gap-12 mb-8">
+      <span class="badge badge-{{ f.status }}">{{ f.status }}</span>
+      <span class="badge badge-{{ score_class }}">CVSS {{ '%.1f'|format(f.cvss_score) }} — {{ score_class|upper }}</span>
+      <span class="badge badge-idle">{{ f.method }}</span>
+    </div>
+    <div style="font-size:18px;font-weight:500;color:var(--text-hi);font-family:var(--mono)">
+      {{ f.param.key }} → IDOR
+    </div>
+    <div style="font-size:13px;color:var(--text-dim);margin-top:4px">
+      {{ f.endpoint }}
+    </div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 320px;gap:20px">
+
+  <!-- Left: Evidence -->
+  <div>
+
+    <!-- Request/Response Diff -->
+    <div class="card mb-16">
+      <div class="card-title">Request Evidence</div>
+      <div class="evidence-grid">
+
+        <!-- Original -->
+        <div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:8px;letter-spacing:.1em;text-transform:uppercase">
+            Original (your ID)
+          </div>
+          <div class="req-panel">
+            <div class="req-panel-header" style="color:var(--text-dim)">
+              <span>●</span> Request
+            </div>
+            <div class="req-panel-body">
+              <div>
+                <span class="http-method">{{ f.method }}</span>
+                <span class="http-url"> {{ ev.original_request.url }}</span>
+              </div>
+              <div style="margin-top:8px;color:var(--text-dim)">---</div>
+              {% for key, val in ev.original_request.headers.items() %}
+              <div>
+                <span class="http-header-key">{{ key }}:</span>
+                <span class="http-header-val"> {{ val[:60] }}{{ '...' if val|length > 60 else '' }}</span>
+              </div>
+              {% endfor %}
+              {% if ev.original_request.body %}
+              <div style="margin-top:8px">
+                <span class="http-body">{{ ev.original_request.body | tojson(indent=2) }}</span>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+          <div class="req-panel mt-8">
+            <div class="req-panel-header" style="color:var(--text-dim)">
+              <span>{{ ev.original_response.status_code }}</span> Response
+            </div>
+            <div class="req-panel-body">
+              <span class="http-body">{{ ev.original_response.body | tojson(indent=2) if ev.original_response.body else '(empty)' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Exploit -->
+        <div>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--red);margin-bottom:8px;letter-spacing:.1em;text-transform:uppercase">
+            Exploit (injected ID: {{ ev.injected_id }})
+          </div>
+          <div class="req-panel" style="border-color:var(--red)">
+            <div class="req-panel-header" style="color:var(--red)">
+              <span>●</span> Request
+            </div>
+            <div class="req-panel-body">
+              <div>
+                <span class="http-method">{{ f.method }}</span>
+                <span class="http-url"> {{ ev.exploit_request.url | replace(ev.injected_id, '<span class="injected">' + ev.injected_id + '</span>') | safe }}</span>
+              </div>
+              <div style="margin-top:8px;color:var(--text-dim)">---</div>
+              {% for key, val in ev.exploit_request.headers.items() %}
+              <div>
+                <span class="http-header-key">{{ key }}:</span>
+                <span class="http-header-val"> {{ val[:60] }}{{ '...' if val|length > 60 else '' }}</span>
+              </div>
+              {% endfor %}
+              {% if ev.exploit_request.body %}
+              <div style="margin-top:8px">
+                <span class="http-body">{{ ev.exploit_request.body | tojson(indent=2) }}</span>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+          <div class="req-panel mt-8" style="border-color:var(--red)">
+            <div class="req-panel-header" style="color:var(--red)">
+              <span>{{ ev.exploit_response.status_code }}</span> Response
+            </div>
+            <div class="req-panel-body">
+              <span class="http-body">{{ ev.exploit_response.body | tojson(indent=2) if ev.exploit_response.body else '(empty)' }}</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Exposed Fields -->
+    {% if ev.fields_exposed %}
+    <div class="card mb-16">
+      <div class="card-title">Exposed Sensitive Fields</div>
+      {% for field in ev.fields_exposed %}
+      <div class="diff-field">
+        <span class="field-name">{{ field }}</span>
+        <span class="field-sensitive">⚠ sensitive</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+  </div>
+
+  <!-- Right: Finding Metadata + CVSS -->
+  <div>
+
+    <div class="card mb-16">
+      <div class="card-title">Finding Details</div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="flex-between">
+          <span class="dim text-sm">ID</span>
+          <span class="mono text-sm accent">{{ f.id }}</span>
+        </div>
+        <div class="flex-between">
+          <span class="dim text-sm">Endpoint</span>
+          <span class="mono text-sm hi truncate" style="max-width:180px">{{ f.endpoint }}</span>
+        </div>
+        <div class="flex-between">
+          <span class="dim text-sm">Method</span>
+          <span class="mono text-sm hi">{{ f.method }}</span>
+        </div>
+        <div class="flex-between">
+          <span class="dim text-sm">Parameter</span>
+          <span class="mono text-sm accent">{{ f.param.key }} ({{ f.param.param_type }})</span>
+        </div>
+        <div class="flex-between">
+          <span class="dim text-sm">Injected ID</span>
+          <span class="mono text-sm red">{{ ev.injected_id }}</span>
+        </div>
+        <div class="flex-between">
+          <span class="dim text-sm">Confirmations</span>
+          <span class="mono text-sm hi">{{ f.hit_count }} hits</span>
+        </div>
+        <div class="flex-between">
+          <span class="dim text-sm">Diff Score</span>
+          <span class="mono text-sm hi">{{ '%.3f'|format(ev.diff_score) }}</span>
+        </div>
+        <div class="flex-between">
+          <span class="dim text-sm">Timestamp</span>
+          <span class="mono text-sm dim">{{ f.timestamp[:19] }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CVSS breakdown -->
+    <div class="card mb-16">
+      <div class="card-title">CVSS Breakdown</div>
+      <div class="flex-between mb-12">
+        <span style="font-family:var(--mono);font-size:28px;font-weight:600;color:var(--{{ score_class == 'critical' and 'red' or (score_class == 'high' and 'yellow' or 'blue') }})">
+          {{ '%.1f'|format(f.cvss_score) }}
+        </span>
+        <span class="badge badge-{{ score_class }}">{{ score_class|upper }}</span>
+      </div>
+      <div class="cvss-bar-wrap mb-12">
+        <div class="cvss-bar-fill badge-{{ score_class }}" style="width:{{ (f.cvss_score / 10 * 100)|int }}%;background:{% if score_class == 'critical' %}var(--red){% elif score_class == 'high' %}var(--yellow){% else %}var(--blue){% endif %}"></div>
+      </div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--text-dim);word-break:break-all;line-height:1.6">
+        {{ f.cvss_vector }}
+      </div>
+    </div>
+
+    <!-- HackerOne prep -->
+    <div class="card">
+      <div class="card-title">HackerOne Report Prep</div>
+      <div style="font-size:12px;color:var(--text-dim);margin-bottom:12px">
+        Week 2 will auto-generate the full H1 submission. For now, you have everything needed:
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px">
+          <span style="color:var(--accent)">✓</span> Title
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px">
+          <span style="color:var(--accent)">✓</span> CVSS Score + Vector
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px">
+          <span style="color:var(--accent)">✓</span> Request evidence (original + exploit)
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px">
+          <span style="color:var(--accent)">✓</span> Response evidence (both sides)
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px">
+          <span style="color:var(--accent)">✓</span> Sensitive fields identified
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;font-size:12px">
+          <span style="color:var(--accent)">✓</span> Auto-generated H1 template
+        </div>
+      </div>
+      <div style="margin-top:16px">
+        <a href="/report/{{ f.id }}" class="btn btn-primary" style="width:100%;justify-content:center">
+          Generate Report →
+        </a>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

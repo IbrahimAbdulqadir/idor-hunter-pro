@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard — IDOR Hunter Pro{% endblock %}
+
+{% block breadcrumb %}<span>Dashboard</span>{% endblock %}
+
+{% block extra_styles %}
+.scan-row { cursor: pointer; }
+.scan-row:hover td { background: var(--accent-dim); }
+.welcome-banner {
+  background: linear-gradient(135deg, var(--surface) 0%, #0d1a1a 100%);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+}
+{% endblock %}
+
+{% block content %}
+
+<!-- Welcome banner — shows only when no scans exist -->
+<div class="welcome-banner" id="welcomeBanner" style="display:none">
+  <div class="flex-between">
+    <div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.12em;text-transform:uppercase;margin-bottom:6px">
+        Ready to Hunt
+      </div>
+      <div style="font-size:16px;font-weight:500;color:var(--text-hi)">
+        No scans yet. Start your first mission.
+      </div>
+      <div style="font-size:13px;color:var(--text-dim);margin-top:4px">
+        Configure a target, paste your endpoints, and let the engine do the work.
+      </div>
+    </div>
+    <a href="/scan/new" class="btn btn-primary btn-lg">Launch First Scan</a>
+  </div>
+</div>
+
+<!-- Stats row -->
+<div class="grid-4 mb-16" id="statsRow">
+  <div class="stat-card">
+    <div class="stat-label">Total Scans</div>
+    <div class="stat-value accent" id="statScans">—</div>
+    <div class="stat-sub">all sessions</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Confirmed IDORs</div>
+    <div class="stat-value red" id="statConfirmed">—</div>
+    <div class="stat-sub">3+ independent hits</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Suspected</div>
+    <div class="stat-value yellow" id="statSuspected">—</div>
+    <div class="stat-sub">needs verification</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Endpoints Tested</div>
+    <div class="stat-value" id="statEndpoints">—</div>
+    <div class="stat-sub">across all sessions</div>
+  </div>
+</div>
+
+<!-- Sessions table -->
+<div class="card">
+  <div class="flex-between mb-16">
+    <div class="card-title" style="margin-bottom:0">Scan Sessions</div>
+    <a href="/scan/new" class="btn btn-ghost btn-sm">+ New Scan</a>
+  </div>
+
+  <div class="table-wrap">
+    <table id="sessionsTable">
+      <thead>
+        <tr>
+          <th>Session ID</th>
+          <th>Target</th>
+          <th>Status</th>
+          <th>Findings</th>
+          <th>Endpoints</th>
+          <th>Started</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="sessionsBody">
+        <tr id="emptyRow">
+          <td colspan="7">
+            <div class="empty-state">
+              <div class="empty-state-icon">⬡</div>
+              <div class="empty-state-title">No scan sessions</div>
+              <div class="empty-state-text">Launch a scan to see it appear here in real time.</div>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Recent Findings -->
+<div class="card mt-16">
+  <div class="flex-between mb-16">
+    <div class="card-title" style="margin-bottom:0">Recent Findings</div>
+    <a href="/findings" class="btn btn-ghost btn-sm">View all</a>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Endpoint</th>
+          <th>Method</th>
+          <th>Parameter</th>
+          <th>Status</th>
+          <th>CVSS</th>
+          <th>Exposed Data</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="recentFindings">
+        <tr>
+          <td colspan="7" style="color:var(--text-dim);text-align:center;padding:24px">
+            No findings yet
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function loadDashboard() {
+  const [sessRes, findRes] = await Promise.all([
+    fetch('/api/sessions').then(r => r.json()).catch(() => []),
+    fetch('/api/findings').then(r => r.json()).catch(() => [])
+  ]);
+
+  // Stats
+  const confirmed = findRes.filter(f => f.status === 'confirmed').length;
+  const suspected = findRes.filter(f => f.status === 'suspected').length;
+  const totalEps = sessRes.reduce((a, s) => a + (s.stats?.total_endpoints || 0), 0);
+
+  document.getElementById('statScans').textContent = sessRes.length;
+  document.getElementById('statConfirmed').textContent = confirmed;
+  document.getElementById('statSuspected').textContent = suspected;
+  document.getElementById('statEndpoints').textContent = totalEps || '—';
+
+  if (sessRes.length === 0) {
+    document.getElementById('welcomeBanner').style.display = 'flex';
+  }
+
+  // Sessions table
+  const tbody = document.getElementById('sessionsBody');
+  if (sessRes.length > 0) {
+    tbody.innerHTML = sessRes.map(s => `
+      <tr class="scan-row" onclick="window.location='/scan/${s.id}'">
+        <td class="mono" style="color:var(--accent)">${s.id}</td>
+        <td class="truncate" style="max-width:200px">${s.target}</td>
+        <td>${statusBadge(s.status)}</td>
+        <td>
+          <span style="color:var(--red);font-weight:600">${s.stats?.confirmed || 0}</span>
+          <span class="dim"> / ${s.findings || 0}</span>
+        </td>
+        <td class="mono dim">${s.stats?.total_endpoints || '—'}</td>
+        <td class="dim text-sm">${timeAgo(s.started_at)}</td>
+        <td>
+          <a href="/scan/${s.id}" class="btn btn-ghost btn-sm">Monitor →</a>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  // Recent findings
+  const rf = document.getElementById('recentFindings');
+  const top5 = findRes.slice(0, 5);
+  if (top5.length > 0) {
+    rf.innerHTML = top5.map(f => `
+      <tr>
+        <td class="mono text-sm truncate" style="max-width:220px">${f.endpoint}</td>
+        <td><span class="badge badge-idle">${f.method}</span></td>
+        <td class="mono" style="color:var(--accent)">${f.param?.key || '—'}</td>
+        <td>${statusBadge(f.status)}</td>
+        <td>
+          <span class="badge badge-${cvssColor(f.cvss_score)}">${f.cvss_score?.toFixed(1)}</span>
+        </td>
+        <td class="text-sm dim">${(f.evidence?.fields_exposed || []).join(', ') || '—'}</td>
+        <td>
+          <a href="/findings/${f.id}" class="btn btn-ghost btn-sm">View →</a>
+        </td>
+      </tr>
+    `).join('');
+  }
+}
+
+loadDashboard();
+setInterval(loadDashboard, 5000);
+</script>
+{% endblock %}

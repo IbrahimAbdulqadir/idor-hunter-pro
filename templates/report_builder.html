@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+
+{% block title %}Report Builder — {{ finding.id }} — IDOR Hunter Pro{% endblock %}
+
+{% block breadcrumb %}
+  <a href="/" style="color:var(--text-dim);text-decoration:none">Dashboard</a>
+  <span style="color:var(--border-hi);margin:0 8px">/</span>
+  <a href="/findings" style="color:var(--text-dim);text-decoration:none">Findings</a>
+  <span style="color:var(--border-hi);margin:0 8px">/</span>
+  <a href="/findings/{{ finding.id }}" style="color:var(--text-dim);text-decoration:none">{{ finding.id }}</a>
+  <span style="color:var(--border-hi);margin:0 8px">/</span>
+  <span>Report Builder</span>
+{% endblock %}
+
+{% block extra_styles %}
+{% set score = finding.cvss_score %}
+{% set severity = 'critical' if score >= 9 else ('high' if score >= 7 else ('medium' if score >= 4 else 'low')) %}
+{% set sev_colors = {'critical': '#ff4d6d', 'high': '#f5a623', 'medium': '#4a9eff', 'low': '#5a6478'} %}
+{% set sev_color = sev_colors[severity] %}
+
+.export-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 20px;
+  text-align: center;
+  transition: border-color .15s;
+  cursor: pointer;
+  text-decoration: none;
+  display: block;
+}
+.export-card:hover { border-color: var(--accent); }
+.export-card .export-icon { font-size: 32px; margin-bottom: 10px; }
+.export-card .export-label { font-family: var(--mono); font-size: 11px; letter-spacing:.1em; text-transform:uppercase; color: var(--text-dim); margin-bottom: 6px; }
+.export-card .export-desc { font-size: 12px; color: var(--text-dim); }
+
+.checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.checklist-item:last-child { border-bottom: none; }
+.check-icon { font-size: 14px; flex-shrink: 0; }
+
+.preview-frame {
+  width: 100%;
+  height: 600px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+}
+{% endblock %}
+
+{% block content %}
+{% set score = finding.cvss_score %}
+{% set severity = 'critical' if score >= 9 else ('high' if score >= 7 else ('medium' if score >= 4 else 'low')) %}
+{% set sev_colors = {'critical': '#ff4d6d', 'high': '#f5a623', 'medium': '#4a9eff', 'low': '#5a6478'} %}
+{% set sev_color = sev_colors[severity] %}
+
+<div class="page-header">
+  <div class="page-title">Report Builder</div>
+  <div class="page-subtitle">HackerOne-ready HTML + PDF — Finding {{ finding.id }}</div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 320px;gap:20px">
+
+  <!-- Left: Preview -->
+  <div>
+    <div class="card">
+      <div class="flex-between mb-16">
+        <div class="card-title" style="margin-bottom:0">Report Preview</div>
+        <div class="flex-center gap-8">
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('previewFrame').src='/api/report/{{ finding.id }}/preview'">
+            Refresh Preview
+          </button>
+        </div>
+      </div>
+      <iframe
+        id="previewFrame"
+        class="preview-frame"
+        src="/api/report/{{ finding.id }}/preview">
+      </iframe>
+    </div>
+  </div>
+
+  <!-- Right: Export + Checklist -->
+  <div>
+
+    <!-- Severity banner -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-left:3px solid {{ sev_color }};border-radius:6px;padding:16px 20px;margin-bottom:16px">
+      <div style="font-family:var(--mono);font-size:10px;color:{{ sev_color }};letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px">
+        {{ severity|upper }} · CVSS {{ '%.1f'|format(finding.cvss_score) }}
+      </div>
+      <div style="font-size:14px;font-weight:500;color:var(--text-hi)">
+        IDOR via {{ finding.param.key }}
+      </div>
+      <div style="font-size:12px;color:var(--text-dim);margin-top:4px;font-family:var(--mono)">
+        {{ finding.endpoint }}
+      </div>
+    </div>
+
+    <!-- Export buttons -->
+    <div class="card mb-16">
+      <div class="card-title">Export Report</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+
+        <a href="/api/report/{{ finding.id }}/html" class="export-card">
+          <div class="export-icon">📄</div>
+          <div class="export-label">HTML</div>
+          <div class="export-desc">Download for H1 copy-paste</div>
+        </a>
+
+        <a href="/api/report/{{ finding.id }}/pdf" class="export-card">
+          <div class="export-icon">📑</div>
+          <div class="export-label">PDF</div>
+          <div class="export-desc">Attach to H1 submission</div>
+        </a>
+
+      </div>
+
+      <div style="margin-top:14px">
+        <a href="/api/report/{{ finding.id }}/preview" target="_blank" class="btn btn-ghost" style="width:100%;justify-content:center">
+          Open Full Preview in New Tab ↗
+        </a>
+      </div>
+    </div>
+
+    <!-- H1 Submission Checklist -->
+    <div class="card mb-16">
+      <div class="card-title">H1 Submission Checklist</div>
+      <div>
+        <div class="checklist-item">
+          <span class="check-icon" style="color:var(--accent)">✓</span>
+          <span>Title — IDOR via {{ finding.param.key }}</span>
+        </div>
+        <div class="checklist-item">
+          <span class="check-icon" style="color:var(--accent)">✓</span>
+          <span>CVSS {{ '%.1f'|format(finding.cvss_score) }} score + vector</span>
+        </div>
+        <div class="checklist-item">
+          <span class="check-icon" style="color:var(--accent)">✓</span>
+          <span>Affected URL documented</span>
+        </div>
+        <div class="checklist-item">
+          <span class="check-icon" style="color:var(--accent)">✓</span>
+          <span>Steps to reproduce (numbered)</span>
+        </div>
+        <div class="checklist-item">
+          <span class="check-icon" style="color:var(--accent)">✓</span>
+          <span>Original + exploit requests</span>
+        </div>
+        <div class="checklist-item">
+          <span class="check-icon" style="color:var(--accent)">✓</span>
+          <span>Both responses side by side</span>
+        </div>
+        <div class="checklist-item">
+          <span class="check-icon" style="color:var(--accent)">✓</span>
+          <span>Sensitive fields identified</span>
+        </div>
+        <div class="checklist-item">
+          <span class="check-icon" style="color:var(--accent)">✓</span>
+          <span>Impact statement</span>
+        </div>
+        <div class="checklist-item">
+          <span class="check-icon" style="color:var(--accent)">✓</span>
+          <span>Recommended fix</span>
+        </div>
+        <div class="checklist-item">
+          <span class="check-icon" style="color:var(--yellow)">○</span>
+          <span style="color:var(--text-dim)">Video PoC — record manually</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Finding summary -->
+    <div class="card">
+      <div class="card-title">Finding Summary</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="flex-between">
+          <span class="dim text-sm">Status</span>
+          <span class="badge badge-{{ finding.status }}">{{ finding.status }}</span>
+        </div>
+        <div class="flex-between">
+          <span class="dim text-sm">Confirmations</span>
+          <span class="mono text-sm hi">{{ finding.hit_count }} hits</span>
+        </div>
+        <div class="flex-between">
+          <span class="dim text-sm">Injected ID</span>
+          <span class="mono text-sm red">{{ finding.evidence.injected_id }}</span>
+        </div>
+        <div class="flex-between">
+          <span class="dim text-sm">Exposed Fields</span>
+          <span class="mono text-sm accent">{{ finding.evidence.fields_exposed|join(', ') or '—' }}</span>
+        </div>
+      </div>
+      <div style="margin-top:16px">
+        <a href="/findings/{{ finding.id }}" class="btn btn-ghost" style="width:100%;justify-content:center">
+          ← Back to Evidence Viewer
+        </a>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}

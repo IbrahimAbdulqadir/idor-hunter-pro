@@ -1,0 +1,743 @@
+{% extends "base.html" %}
+
+{% block title %}New Scan — IDOR Hunter Pro{% endblock %}
+
+{% block breadcrumb %}
+  <a href="/" style="color:var(--text-dim);text-decoration:none">Dashboard</a>
+  <span style="color:var(--border-hi);margin:0 8px">/</span>
+  <span>New Scan</span>
+{% endblock %}
+
+{% block extra_styles %}
+.mode-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: var(--surface);
+}
+.mode-card:hover { border-color: var(--border-hi); }
+.mode-card.selected { border-color: var(--accent); background: var(--accent-dim); }
+.mode-card.disabled { opacity:.5; cursor:not-allowed; }
+.mode-card .mode-title { font-weight: 500; color: var(--text-hi); margin-bottom: 4px; }
+.mode-card .mode-desc { font-size: 12px; color: var(--text-dim); }
+.mode-badge {
+  font-family: var(--mono); font-size: 9px; letter-spacing: .1em;
+  text-transform: uppercase; padding: 2px 7px;
+  border-radius: 2px; display: inline-block; margin-bottom: 8px;
+}
+.mode-badge.active  { color: var(--accent); background: var(--accent-dim); border: 1px solid var(--accent); }
+.mode-badge.coming  { color: var(--text-dim); background: var(--border); }
+
+.proxy-panel {
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 20px;
+  margin-top: 16px;
+  display: none;
+}
+.proxy-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.toggle-switch {
+  position: relative;
+  width: 44px; height: 24px;
+  cursor: pointer;
+}
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: var(--border);
+  border-radius: 24px;
+  transition: .3s;
+}
+.toggle-slider:before {
+  content: '';
+  position: absolute;
+  width: 18px; height: 18px;
+  left: 3px; bottom: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: .3s;
+}
+input:checked + .toggle-slider { background: var(--accent); }
+input:checked + .toggle-slider:before { transform: translateX(20px); }
+
+.proxy-status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  margin-top: 12px;
+}
+.pdot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  flex-shrink: 0;
+}
+.pdot.on { background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: pulse 1.5s infinite; }
+
+.preview-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.preview-item.testable { border-left: 2px solid var(--accent); }
+.preview-item.skip { border-left: 2px solid var(--text-dim); opacity:.6; }
+.param-chip {
+  display: inline-block;
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 10px;
+  margin-left: 6px;
+}
+.launch-panel {
+  background: linear-gradient(135deg, var(--surface) 0%, #0a1510 100%);
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--accent);
+  border-radius: 6px;
+  padding: 24px;
+  margin-top: 24px;
+}
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div class="page-title">Configure Scan Mission</div>
+  <div class="page-subtitle">Choose your intercept mode, define session, launch the engine</div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 380px;gap:20px">
+
+  <!-- Left -->
+  <div>
+
+    <!-- Mission Parameters -->
+    <div class="card">
+      <div class="card-title">Mission Parameters</div>
+      <div class="form-group">
+        <label class="form-label">Target Name / Domain</label>
+        <input type="text" class="input" id="target" placeholder="e.g. ALSCO Royal (HackerOne Sandbox)">
+      </div>
+      <div class="grid-2">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Your User ID (Baseline)</label>
+          <input type="text" class="input" id="userId" placeholder="e.g. 1337">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">HTTP Method Default</label>
+          <select class="select" id="defaultMethod">
+            <option value="GET">GET</option>
+            <option value="POST">POST</option>
+            <option value="PUT">PUT</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:0;margin-top:18px">
+        <label class="form-label">Target Domains (Allowlist)</label>
+        <input type="text" class="input" id="targetDomains" placeholder="api.sendgrid.com, app.sendgrid.com">
+        <div class="form-hint">
+          Comma-separated. Only these domains will be tested — everything else (analytics, trackers, third-party scripts) is automatically excluded. Leave blank to auto-exclude known trackers only.
+        </div>
+      </div>
+    </div>
+
+    <!-- Intercept Mode -->
+    <div class="card mt-16">
+      <div class="card-title">Intercept Mode</div>
+      <div class="grid-3">
+
+        <div class="mode-card selected" id="modeManual" onclick="selectMode('manual')">
+          <div class="mode-badge active">Active</div>
+          <div class="mode-title">Manual URL List</div>
+          <div class="mode-desc">Paste known endpoints. Best for targeted HackerOne attacks.</div>
+        </div>
+
+        <div class="mode-card" id="modeProxy" onclick="selectMode('proxy')">
+          <div class="mode-badge active">Active</div>
+          <div class="mode-title">Proxy Mode</div>
+          <div class="mode-desc">Route browser through IDOR Hunter. Captures all authenticated calls automatically.</div>
+        </div>
+
+        <div class="mode-card" id="modeCrawl" onclick="selectMode('crawl')">
+          <div class="mode-badge active">Active</div>
+          <div class="mode-title">Crawl Mode</div>
+          <div class="mode-desc">Headless browser logs in and maps the site automatically. No proxy, no certs.</div>
+        </div>
+
+      </div>
+
+      <!-- Crawl Panel — shown when crawl mode selected -->
+      <div class="proxy-panel" id="crawlPanel">
+        <div class="form-group">
+          <label class="form-label">Base URL (start page)</label>
+          <input type="text" class="input" id="crawlBaseUrl" placeholder="https://app.sendgrid.com/dashboard">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Authentication Method</label>
+          <select class="select" id="crawlAuthMode" onchange="toggleCrawlAuth()">
+            <option value="cookies">Paste Cookies (faster, reuses your session)</option>
+            <option value="credentials">Username / Password (crawler logs in itself)</option>
+          </select>
+        </div>
+
+        <div id="crawlCookiesSection">
+          <div class="form-group">
+            <label class="form-label">Cookies</label>
+            <input type="text" class="input" id="crawlCookies" placeholder="session=abc123; auth_token=xyz">
+          </div>
+        </div>
+
+        <div id="crawlCredsSection" style="display:none">
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label">Username / Email</label>
+              <input type="text" class="input" id="crawlUsername" placeholder="you@example.com">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Password</label>
+              <input type="password" class="input" id="crawlPassword" placeholder="••••••••">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Login Page URL</label>
+            <input type="text" class="input" id="crawlLoginUrl" placeholder="https://app.sendgrid.com/login">
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Max Crawl Depth</label>
+            <input type="number" class="input" id="crawlMaxDepth" value="4" min="1" max="6">
+            <div class="form-hint">How many link-clicks deep to follow</div>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Max Pages</label>
+            <input type="number" class="input" id="crawlMaxPages" value="60" min="5" max="200">
+          </div>
+        </div>
+
+        <div class="proxy-status-indicator" id="crawlStatusBox">
+          <div class="pdot" id="crawlDot"></div>
+          <span id="crawlStatusText">Not started</span>
+        </div>
+
+        <div style="margin-top:12px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px" id="crawlLiveStats">
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:10px;text-align:center">
+            <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase">Pages</div>
+            <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--accent)" id="cPages">0</div>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:10px;text-align:center">
+            <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase">Captured</div>
+            <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--text-hi)" id="cCaptured">0</div>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:10px;text-align:center">
+            <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--red)" id="cFindings">0</div>
+            <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-top:4px;text-transform:uppercase">Findings</div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px">
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">
+            Crawl Feed
+          </div>
+          <div id="crawlFeed" style="max-height:200px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:10px">
+            <div class="dim text-sm" style="text-align:center;padding:20px 0">Click "Start Crawl" below</div>
+          </div>
+        </div>
+
+        <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:14px" onclick="startCrawl()" id="crawlStartBtn">
+          Start Crawl
+        </button>
+      </div>
+
+
+      <!-- Proxy Panel — shown when proxy mode selected -->
+      <div class="proxy-panel" id="proxyPanel">
+        <div class="proxy-toggle">
+          <div>
+            <div style="font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px">
+              mitmproxy Engine
+            </div>
+            <div style="font-size:12px;color:var(--text-dim)">
+              Toggle to activate the proxy interceptor on port 8080
+            </div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="proxyToggle" onchange="toggleProxy()">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="proxy-status-indicator" id="proxyStatusBox">
+          <div class="pdot" id="proxyDot"></div>
+          <span id="proxyStatusText">Proxy inactive — toggle to start</span>
+        </div>
+
+        <div style="margin-top:14px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:4px">
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">
+            Also run in terminal:
+          </div>
+          <code style="font-family:var(--mono);font-size:11px;color:var(--accent);display:block">
+            mitmdump -s proxy_addon.py --listen-port 8080 --ssl-insecure
+          </code>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:8px">
+            Then set Firefox proxy → Manual → 127.0.0.1:8080
+          </div>
+        </div>
+
+        <div style="margin-top:12px" id="proxyLiveStats" style="display:none">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:10px;text-align:center">
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase">Captured</div>
+              <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--accent)" id="pCaptured">0</div>
+            </div>
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:10px;text-align:center">
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase">Probes</div>
+              <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--text-hi)" id="pProbes">0</div>
+            </div>
+            <div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:10px;text-align:center">
+              <div style="font-family:var(--mono);font-size:9px;color:var(--text-dim);margin-bottom:4px;text-transform:uppercase">Findings</div>
+              <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--red)" id="pFindings">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live capture feed -->
+        <div style="margin-top:12px">
+          <div style="font-family:var(--mono);font-size:10px;color:var(--text-dim);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">
+            Live Capture Feed
+          </div>
+          <div id="proxyFeed" style="max-height:200px;overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:10px">
+            <div class="dim text-sm" style="text-align:center;padding:20px 0">Start proxy and browse your target</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Session Auth — shown in manual mode -->
+    <div id="manualSection">
+      <div class="card mt-16">
+        <div class="card-title">Session & Authentication</div>
+        <div class="form-group">
+          <label class="form-label">Cookies</label>
+          <input type="text" class="input" id="cookies" placeholder="session=abc123; csrf_token=xyz">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Additional Headers</label>
+          <textarea class="textarea" id="headers" style="min-height:80px"
+            placeholder="Authorization: Bearer eyJhbGc...&#10;X-API-Key: your-key-here"></textarea>
+        </div>
+      </div>
+
+      <div class="card mt-16">
+        <div class="flex-between mb-16">
+          <div class="card-title" style="margin-bottom:0">Endpoint List</div>
+          <button class="btn btn-ghost btn-sm" onclick="previewEndpoints()">Preview IDs →</button>
+        </div>
+        <div class="form-group">
+          <textarea class="textarea" id="endpoints" style="min-height:180px;font-size:12px"
+            placeholder="# Format: METHOD URL [optional JSON body]&#10;GET https://target.com/api/users/1337&#10;GET https://target.com/api/orders/9821&#10;POST https://target.com/api/docs/view {&quot;doc_id&quot;: 4421}"></textarea>
+        </div>
+        <div id="previewPanel" style="display:none">
+          <div style="border-top:1px solid var(--border);margin:16px 0"></div>
+          <div id="previewList"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Right: Summary + Settings + Launch -->
+  <div>
+    <div style="position:sticky;top:72px">
+
+      <div class="card">
+        <div class="card-title">Mission Summary</div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="flex-between">
+            <span class="dim text-sm">Target</span>
+            <span class="mono text-sm hi" id="summaryTarget">—</span>
+          </div>
+          <div class="flex-between">
+            <span class="dim text-sm">Your User ID</span>
+            <span class="mono text-sm accent" id="summaryUserId">—</span>
+          </div>
+          <div class="flex-between">
+            <span class="dim text-sm">Mode</span>
+            <span class="mono text-sm hi" id="summaryMode">Manual URL</span>
+          </div>
+          <div class="flex-between" id="summaryEpRow">
+            <span class="dim text-sm">Endpoints</span>
+            <span class="mono text-sm hi" id="summaryEndpoints">0</span>
+          </div>
+          <div class="flex-between" id="summaryProxyRow" style="display:none">
+            <span class="dim text-sm">Proxy Status</span>
+            <span class="mono text-sm" id="summaryProxyStatus">Inactive</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mt-16">
+        <div class="card-title">Engine Settings</div>
+        <div class="form-group">
+          <label class="form-label">Request Delay (ms)</label>
+          <input type="number" class="input" value="150" id="delay" min="0" max="2000">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Min Confirmations</label>
+          <input type="number" class="input" value="3" id="minHits" min="1" max="10">
+        </div>
+      </div>
+
+      <div class="launch-panel">
+        <div style="font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.1em;text-transform:uppercase;margin-bottom:8px">
+          Ready to Launch
+        </div>
+        <button class="btn btn-primary btn-lg" style="width:100%;justify-content:center" onclick="launchScan()">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="4,2 14,8 4,14"/>
+          </svg>
+          Launch Scan
+        </button>
+        <div id="launchError" style="display:none;color:var(--red);font-size:12px;margin-top:10px;font-family:var(--mono)"></div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let currentMode = 'manual';
+let proxyId = null;
+let proxyActive = false;
+let evtSource = null;
+let captureCount = 0;
+let probeCount = 0;
+let findingCount = 0;
+let firstFeed = true;
+
+function selectMode(mode) {
+  document.querySelectorAll('.mode-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('mode' + mode.charAt(0).toUpperCase() + mode.slice(1)).classList.add('selected');
+  currentMode = mode;
+
+  document.getElementById('proxyPanel').style.display = mode === 'proxy' ? 'block' : 'none';
+  document.getElementById('crawlPanel').style.display = mode === 'crawl' ? 'block' : 'none';
+  document.getElementById('manualSection').style.display = mode === 'manual' ? 'block' : 'none';
+
+  const modeLabels = {manual: 'Manual URL', proxy: 'Proxy Mode', crawl: 'Crawl Mode'};
+  document.getElementById('summaryMode').textContent = modeLabels[mode];
+  document.getElementById('summaryEpRow').style.display = mode === 'manual' ? 'flex' : 'none';
+  document.getElementById('summaryProxyRow').style.display = (mode === 'proxy' || mode === 'crawl') ? 'flex' : 'none';
+}
+
+function toggleCrawlAuth() {
+  const mode = document.getElementById('crawlAuthMode').value;
+  document.getElementById('crawlCookiesSection').style.display = mode === 'cookies' ? 'block' : 'none';
+  document.getElementById('crawlCredsSection').style.display = mode === 'credentials' ? 'block' : 'none';
+}
+
+let crawlId = null;
+let crawlEvtSource = null;
+let crawlPages = 0, crawlCaptured = 0, crawlFindings = 0;
+let firstCrawlFeed = true;
+
+async function startCrawl() {
+  const baseUrl = document.getElementById('crawlBaseUrl').value;
+  if (!baseUrl) {
+    alert('Enter a base URL to start crawling');
+    return;
+  }
+
+  const authMode = document.getElementById('crawlAuthMode').value;
+  const payload = {
+    target: document.getElementById('target').value || 'Crawl Session',
+    user_id: document.getElementById('userId').value || '1',
+    base_url: baseUrl,
+    auth_mode: authMode,
+    target_domains: document.getElementById('targetDomains').value,
+    max_depth: document.getElementById('crawlMaxDepth').value,
+    max_pages: document.getElementById('crawlMaxPages').value,
+  };
+
+  if (authMode === 'cookies') {
+    payload.cookies = document.getElementById('crawlCookies').value;
+  } else {
+    payload.username = document.getElementById('crawlUsername').value;
+    payload.password = document.getElementById('crawlPassword').value;
+    payload.login_url = document.getElementById('crawlLoginUrl').value;
+  }
+
+  document.getElementById('crawlStartBtn').textContent = 'Crawling...';
+  document.getElementById('crawlStartBtn').disabled = true;
+  document.getElementById('crawlDot').classList.add('on');
+  document.getElementById('crawlStatusText').textContent = 'Starting headless browser...';
+
+  const res = await fetch('/api/crawl/start', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  crawlId = data.crawl_id;
+  document.getElementById('summaryProxyStatus').textContent = 'Crawling';
+  document.getElementById('summaryProxyStatus').style.color = 'var(--accent)';
+
+  connectCrawlSSE();
+}
+
+function connectCrawlSSE() {
+  crawlEvtSource = new EventSource(`/api/crawl/${crawlId}/events`);
+
+  crawlEvtSource.addEventListener('phase', e => {
+    const d = JSON.parse(e.data);
+    document.getElementById('crawlStatusText').textContent = d.message;
+    addCrawlFeed('PHASE', d.label, 'accent');
+  });
+
+  crawlEvtSource.addEventListener('login_complete', e => {
+    addCrawlFeed('AUTH', 'Logged in successfully', 'accent');
+  });
+
+  crawlEvtSource.addEventListener('page_crawled', e => {
+    const d = JSON.parse(e.data);
+    crawlPages = d.pages_crawled;
+    document.getElementById('cPages').textContent = crawlPages;
+    addCrawlFeed('PAGE', d.url, 'dim');
+  });
+
+  crawlEvtSource.addEventListener('endpoint_captured', e => {
+    const d = JSON.parse(e.data);
+    crawlCaptured = d.total_captured;
+    document.getElementById('cCaptured').textContent = crawlCaptured;
+    addCrawlFeed(d.method, d.url, 'accent');
+  });
+
+  crawlEvtSource.addEventListener('finding', e => {
+    crawlFindings++;
+    document.getElementById('cFindings').textContent = crawlFindings;
+    const f = JSON.parse(e.data).finding;
+    addCrawlFeed('FIND', `IDOR on ${f.endpoint}`, 'red');
+  });
+
+  crawlEvtSource.addEventListener('error', e => {
+    const d = JSON.parse(e.data);
+    addCrawlFeed('ERROR', d.message, 'red');
+  });
+
+  crawlEvtSource.addEventListener('complete', e => {
+    crawlEvtSource.close();
+    document.getElementById('crawlStartBtn').textContent = 'Crawl Complete — View Findings';
+    document.getElementById('crawlStartBtn').disabled = false;
+    document.getElementById('crawlStartBtn').onclick = () => window.location = '/findings';
+    document.getElementById('crawlDot').classList.remove('on');
+    document.getElementById('crawlStatusText').textContent = 'Complete';
+    addCrawlFeed('DONE', 'Crawl finished', 'accent');
+  });
+
+  crawlEvtSource.addEventListener('heartbeat', () => {});
+}
+
+function addCrawlFeed(tag, text, color) {
+  const feed = document.getElementById('crawlFeed');
+  if (firstCrawlFeed) { feed.innerHTML = ''; firstCrawlFeed = false; }
+  const div = document.createElement('div');
+  div.style.cssText = 'font-family:var(--mono);font-size:11px;padding:4px 0;border-bottom:1px solid var(--border);display:flex;gap:8px';
+  const short = text.length > 50 ? text.slice(0,50)+'...' : text;
+  div.innerHTML = `<span style="color:var(--${color});flex-shrink:0">${tag}</span><span style="color:var(--text-dim)">${short}</span>`;
+  feed.insertBefore(div, feed.firstChild);
+  while (feed.children.length > 50) feed.removeChild(feed.lastChild);
+}
+
+async function toggleProxy() {
+  const on = document.getElementById('proxyToggle').checked;
+  const dot = document.getElementById('proxyDot');
+  const statusText = document.getElementById('proxyStatusText');
+
+  if (on) {
+    const target = document.getElementById('target').value || 'Proxy Session';
+    const userId = document.getElementById('userId').value || '1';
+
+    const res = await fetch('/api/proxy/start', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({target, user_id: userId})
+    });
+    const data = await res.json();
+    proxyId = data.proxy_id;
+    proxyActive = true;
+
+    dot.classList.add('on');
+    statusText.textContent = `Proxy active — session ${proxyId} — browse your target`;
+    document.getElementById('summaryProxyStatus').textContent = 'Active';
+    document.getElementById('summaryProxyStatus').style.color = 'var(--accent)';
+    document.getElementById('proxyLiveStats').style.display = 'block';
+
+    connectProxySSE();
+  } else {
+    if (proxyId) {
+      await fetch(`/api/proxy/stop/${proxyId}`, {method: 'POST'});
+      if (evtSource) evtSource.close();
+    }
+    proxyActive = false;
+    dot.classList.remove('on');
+    statusText.textContent = 'Proxy inactive — toggle to start';
+    document.getElementById('summaryProxyStatus').textContent = 'Inactive';
+    document.getElementById('summaryProxyStatus').style.color = 'var(--text-dim)';
+  }
+}
+
+function connectProxySSE() {
+  evtSource = new EventSource(`/api/proxy/${proxyId}/events`);
+
+  evtSource.addEventListener('endpoint_captured', e => {
+    const d = JSON.parse(e.data);
+    captureCount++;
+    document.getElementById('pCaptured').textContent = captureCount;
+    addFeed(d.method || 'GET', d.url, 'accent');
+  });
+
+  evtSource.addEventListener('probe', e => {
+    const d = JSON.parse(e.data);
+    probeCount = d.probes_sent || probeCount + 1;
+    document.getElementById('pProbes').textContent = probeCount;
+  });
+
+  evtSource.addEventListener('finding', e => {
+    findingCount++;
+    document.getElementById('pFindings').textContent = findingCount;
+    const f = JSON.parse(e.data).finding;
+    addFeed('FIND', `IDOR on ${f.endpoint}`, 'red');
+  });
+
+  evtSource.addEventListener('heartbeat', () => {});
+}
+
+function addFeed(method, url, color) {
+  const feed = document.getElementById('proxyFeed');
+  if (firstFeed) { feed.innerHTML = ''; firstFeed = false; }
+  const div = document.createElement('div');
+  div.style.cssText = 'font-family:var(--mono);font-size:11px;padding:4px 0;border-bottom:1px solid var(--border);display:flex;gap:8px';
+  const short = url.length > 55 ? url.slice(0,55)+'...' : url;
+  div.innerHTML = `<span style="color:var(--${color});flex-shrink:0">${method}</span><span style="color:var(--text-dim)">${short}</span>`;
+  feed.insertBefore(div, feed.firstChild);
+  while (feed.children.length > 40) feed.removeChild(feed.lastChild);
+}
+
+['target','userId','endpoints'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', updateSummary);
+});
+
+function updateSummary() {
+  const target = document.getElementById('target').value || '—';
+  const userId = document.getElementById('userId').value || '—';
+  const epEl = document.getElementById('endpoints');
+  const lines = epEl ? epEl.value.split('\n').filter(l => l.trim() && !l.trim().startsWith('#')) : [];
+  document.getElementById('summaryTarget').textContent = target.length > 20 ? target.slice(0,20)+'…' : target;
+  document.getElementById('summaryUserId').textContent = userId;
+  document.getElementById('summaryEndpoints').textContent = lines.length;
+}
+
+async function previewEndpoints() {
+  const eps = document.getElementById('endpoints').value;
+  if (!eps.trim()) return;
+  const res = await fetch('/api/scan/preview', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({endpoints: eps})
+  });
+  const data = await res.json();
+  const testable = data.filter(e => e.testable).length;
+  document.getElementById('summaryEndpoints').textContent = `${testable}/${data.length}`;
+  const panel = document.getElementById('previewPanel');
+  const list = document.getElementById('previewList');
+  panel.style.display = 'block';
+  list.innerHTML = data.map(ep => `
+    <div class="preview-item ${ep.testable ? 'testable' : 'skip'}">
+      <div class="flex-between">
+        <span>
+          <span style="color:var(--text-dim)">${ep.method}</span>
+          <span style="margin-left:8px;color:var(--text-hi)">${ep.url}</span>
+          ${ep.params.map(p => `<span class="param-chip">${p.key}=${p.value}</span>`).join('')}
+        </span>
+        <span style="font-size:10px;color:${ep.testable ? 'var(--accent)' : 'var(--text-dim)'}">
+          ${ep.testable ? `${ep.params_found} param(s)` : 'skip'}
+        </span>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function launchScan() {
+  const errEl = document.getElementById('launchError');
+  errEl.style.display = 'none';
+
+  if (currentMode === 'proxy') {
+    if (!proxyActive) {
+      errEl.textContent = 'Enable proxy toggle first, then browse your target.';
+      errEl.style.display = 'block';
+      return;
+    }
+    window.location = '/findings';
+    return;
+  }
+
+  const payload = {
+    target: document.getElementById('target').value || 'Unknown',
+    user_id: document.getElementById('userId').value || '1',
+    cookies: document.getElementById('cookies').value,
+    headers: document.getElementById('headers').value,
+    endpoints: document.getElementById('endpoints').value,
+  };
+
+  if (!payload.endpoints.trim()) {
+    errEl.textContent = 'Error: No endpoints defined.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/scan/start', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.scan_id) {
+      window.location = `/scan/${data.scan_id}`;
+    } else {
+      errEl.textContent = data.error || 'Failed to start scan.';
+      errEl.style.display = 'block';
+    }
+  } catch(e) {
+    errEl.textContent = 'Network error.';
+    errEl.style.display = 'block';
+  }
+}
+
+updateSummary();
+</script>
+{% endblock %}
