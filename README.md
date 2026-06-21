@@ -116,4 +116,4 @@ This tool is built for authorized security testing only — bug bounty programs 
 
 Ibrahim Abdulqadir — Cybersecurity researcher, BSc Cybersecurity (Bayero University Kano), independent bug bounty hunter.
 
-[LinkedIn](https://linkedin.com/in/ibrahimabdulqadir) · [Portfolio](https://ibrahimabdulqadir.github.io)
+[LinkedIn](https://www.linkedin.com/in/ibrahim-abdulqadir) · [Portfolio](https://ibrahimabdulqadir.github.io)
